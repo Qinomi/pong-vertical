@@ -1,251 +1,289 @@
-import { Platform } from 'react-native';
+import {
+  firebaseGetFirstToXScores,
+  firebaseGetTimeAttackScores,
+  firebaseSaveFirstToXScore,
+  firebaseSaveTimeAttackScore
+} from './firebase';
+import { createInitialProfile, getUserProfile as getFirestorePlayerById, incrementUserWin } from './firestore-user';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+export interface Player {
+  player_id: number | string;
+  player_name: string;
+  player_created_date: number; // epoch ms
+  count_win: number;
+  count_lose: number;
+}
+
+export interface ScoreFirstToX {
+  score01_id: string;
+  player_id: string;       // FK - Player 1 (current user)
+  player_id1: string;      // FK - Player 2 (opponent or AI=1)
+  score01_player: number;  // Player 1's score
+  score01_player1: number; // Player 2's score
+  score01_winner: string;  // player_id of winner
+  score01_time_elapse: number; // seconds
+  score01_created_date: number; // epoch ms
+}
+
+export interface ScoreTimeAttackX {
+  score02_id: string;
+  player_id: string;          // FK - Player
+  score02_verdict: string;    // 'WIN' | 'LOSE'
+  score02_time_duration: number; // seconds survived
+  score02_created_date: number;  // epoch ms
+}
+
+// Computer AI player ID (Firestore ID)
+export const AI_PLAYER_ID = 'ai_computer';
+
+// =============================================================================
+// Player Functions
+// =============================================================================
+
+export async function createOrGetPlayer(name: string, docId?: string): Promise<Player> {
+  // If we have a specific docId (Auth UID), usage it.
+  // Otherwise, fallback to a name-based ID for guests (not ideal but keeps strict users collection)
+  // or a fixed guest ID.
+  const userId = docId || `guest_${name.replace(/\s+/g, '_').toLowerCase()}`;
+
+  // Check if profile exists
+  let profile = await getFirestorePlayerById(userId);
+
+  if (!profile) {
+    // Create it
+    await createInitialProfile(userId, name);
+    // Fetch again to be sure or just construct it
+    profile = {
+      uid: userId,
+      displayName: name,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      count_win: 0
+    };
+  }
+
+  return {
+    player_id: profile.uid,
+    player_name: profile.displayName,
+    player_created_date: profile.createdAt,
+    count_win: profile.count_win || 0,
+    count_lose: 0, // Not explicitly tracked in UserProfile yet
+  };
+}
+
+export async function updatePlayerStats(playerId: number | string, isWin: boolean): Promise<void> {
+  if (typeof playerId === 'string' && playerId !== AI_PLAYER_ID) {
+    if (isWin) {
+      await incrementUserWin(playerId);
+    }
+  }
+}
+
+export async function getPlayerById(playerId: number | string): Promise<Player | null> {
+  if (playerId === AI_PLAYER_ID) {
+    return {
+      player_id: AI_PLAYER_ID,
+      player_name: 'COMPUTER',
+      player_created_date: 0,
+      count_win: 0,
+      count_lose: 0
+    };
+  }
+
+  try {
+    const p = await getFirestorePlayerById(String(playerId));
+    if (p) {
+      return {
+        player_id: p.uid,
+        player_name: p.displayName,
+        player_created_date: p.createdAt,
+        count_win: p.count_win || 0,
+        count_lose: 0
+      };
+    }
+  } catch { }
+  return null;
+}
+
+export async function getAllPlayers(): Promise<Player[]> {
+  return []; // Not implemented/needed for current UI
+}
+
+// =============================================================================
+// Score_FirstToX Functions
+// =============================================================================
+
+export interface SaveFirstToXInput {
+  playerId: number | string;       // Player 1
+  opponentId: number | string;     // Player 2 (AI = 1)
+  playerScore: number;
+  opponentScore: number;
+  winnerId: number | string;
+  timeElapsed: number;    // seconds
+  isOnline?: boolean;
+}
+
+export async function saveFirstToXScore(input: SaveFirstToXInput): Promise<void> {
+  await firebaseSaveFirstToXScore({
+    player_id: String(input.playerId),
+    player_id1: String(input.opponentId),
+    score01_player: input.playerScore,
+    score01_player1: input.opponentScore,
+    score01_winner: String(input.winnerId),
+    score01_time_elapse: input.timeElapsed,
+    score01_created_date: Date.now(),
+    is_online: input.isOnline || false,
+  });
+}
+
+export async function getFirstToXScores(playerId?: number | string, limit = 50): Promise<ScoreFirstToX[]> {
+  const pid = playerId ? String(playerId) : undefined;
+  // Pass pid to firebase API for server-side filtering
+  const scores = await firebaseGetFirstToXScores(limit, pid);
+  return scores.map(s => ({ ...s, score01_id: s.score01_id || '' }));
+}
+
+// =============================================================================
+// Score_TimeAttackX Functions
+// =============================================================================
+
+export interface SaveTimeAttackInput {
+  playerId: number | string;
+  verdict: 'WIN' | 'LOSE';
+  timeDuration: number; // seconds survived
+  isOnline?: boolean;
+}
+
+export async function saveTimeAttackScore(input: SaveTimeAttackInput): Promise<void> {
+  await firebaseSaveTimeAttackScore({
+    player_id: String(input.playerId),
+    score02_verdict: input.verdict,
+    score02_time_duration: input.timeDuration,
+    score02_created_date: Date.now(),
+    is_online: input.isOnline || false,
+  });
+}
+
+export async function getTimeAttackScores(playerId?: number | string, limit = 50): Promise<ScoreTimeAttackX[]> {
+  const pid = playerId ? String(playerId) : undefined;
+  const scores = await firebaseGetTimeAttackScores(limit, pid);
+  return scores.map(s => ({ ...s, score02_id: s.score02_id || '' }));
+}
+
+// =============================================================================
+// Legacy compatibility
+// =============================================================================
 
 export type GameMode = 'FIRST_TO_5' | 'FIRST_TO_X' | 'TIME_ATTACK';
 
 export interface ScoreEntry {
   id?: number | string;
   name: string;
-  mode: GameMode; // FIRST_TO_5 is normalized to FIRST_TO_X
-
-  // FIRST_TO_X: points scored by player/AI
-  // TIME_ATTACK: playerScore/timeSpent = seconds survived, aiScore = breaches (0 or 1)
+  mode: GameMode;
   playerScore: number;
   aiScore: number;
+  firstTo?: number;
+  timeSpent?: number;
+  targetSeconds?: number;
+  createdAt: number;
+}
+
+export async function saveScoreEntry(input: Omit<ScoreEntry, 'createdAt'> & { userId?: string, isOnline?: boolean }): Promise<void> {
+  // Get or create player
+  const player = await createOrGetPlayer(input.name, input.userId); // Pass userId if available
+
+  if (input.mode === 'TIME_ATTACK') {
+    const isWin = input.aiScore === 0;
+    await saveTimeAttackScore({
+      playerId: player.player_id,
+      verdict: isWin ? 'WIN' : 'LOSE',
+      timeDuration: input.timeSpent ?? input.playerScore,
+      isOnline: input.isOnline,
+    });
+    if (isWin) await incrementUserWin(String(player.player_id));
+  } else {
+    // FIRST_TO_5 or FIRST_TO_X
+    const isWin = input.playerScore > input.aiScore;
+    await saveFirstToXScore({
+      playerId: player.player_id,
+      opponentId: AI_PLAYER_ID,
+      playerScore: input.playerScore,
+      opponentScore: input.aiScore,
+      winnerId: isWin ? player.player_id : AI_PLAYER_ID,
+      timeElapsed: input.timeSpent ?? 0,
+      isOnline: input.isOnline,
+    });
+    // Ensure incrementUserWin is called for human player wins
+    if (isWin) await incrementUserWin(String(player.player_id));
+  }
+}
+
+export async function getScoresByMode(mode: GameMode, limit = 50, userId?: string): Promise<ScoreEntry[]> {
+  if (mode === 'TIME_ATTACK') {
+    const scores = await getTimeAttackScores(userId, limit);
+    const entries: ScoreEntry[] = [];
+
+    for (const s of scores) {
+      const winnerId = s.score02_verdict === 'WIN' ? s.player_id : AI_PLAYER_ID;
+      const winner = await getPlayerById(winnerId);
+      entries.push({
+        id: s.score02_id,
+        name: winner?.player_name ?? (winnerId === AI_PLAYER_ID ? 'COMPUTER' : 'Unknown'),
+        mode: 'TIME_ATTACK',
+        playerScore: s.score02_time_duration,
+        aiScore: s.score02_verdict === 'WIN' ? 0 : 1,
+        timeSpent: s.score02_time_duration,
+        createdAt: s.score02_created_date,
+      });
+    }
+    return entries;
+  }
 
   // FIRST_TO_X
-  firstTo?: number;
+  const scores = await getFirstToXScores(userId, limit);
+  const entries: ScoreEntry[] = [];
 
-  // TIME_ATTACK
-  timeSpent?: number; // seconds survived
-  targetSeconds?: number; // chosen time limit
+  for (const s of scores) {
+    const winnerId = s.score01_winner;
+    const winner = await getPlayerById(winnerId);
 
-  createdAt: number; // epoch ms
-}
+    // Default assumption: I am Player 1
+    let myScore = s.score01_player;
+    let oppScore = s.score01_player1;
 
-const WEB_KEY = 'pong_scores_v4';
+    // If I am Player 2, swap views
+    if (userId && s.player_id1 === userId) {
+      myScore = s.score01_player1;
+      oppScore = s.score01_player;
+    } else if (userId && s.player_id !== userId && s.player_id1 !== userId) {
+      // Edge case: I am neither? (Shouldn't happen with filtered query)
+      // But if it does, keep as is.
+    }
 
-function normalizeMode(mode: GameMode): GameMode {
-  return mode === 'FIRST_TO_5' ? 'FIRST_TO_X' : mode;
-}
-
-// ---------------------
-// Web (localStorage)
-// ---------------------
-
-function readWebScores(): ScoreEntry[] {
-  try {
-    const raw = window.localStorage.getItem(WEB_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed as ScoreEntry[];
-  } catch {
-    return [];
-  }
-}
-
-function writeWebScores(scores: ScoreEntry[]) {
-  try {
-    window.localStorage.setItem(WEB_KEY, JSON.stringify(scores));
-  } catch {
-    // ignore
-  }
-}
-
-// ---------------------
-// Native (expo-sqlite)
-// ---------------------
-
-type SqliteDb = any;
-
-let _dbPromise: Promise<SqliteDb> | null = null;
-
-async function getNativeDb(): Promise<SqliteDb> {
-  if (_dbPromise) return _dbPromise;
-
-  _dbPromise = (async () => {
-    // Lazy import so web builds don't break
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const SQLite = require('expo-sqlite');
-
-    const db = SQLite.openDatabase('pong_scores.db');
-
-    // expo-sqlite (modern) exposes async exec; older versions do not.
-    const execAsync = (sql: string) =>
-      new Promise<void>((resolve, reject) => {
-        db.exec([{ sql, args: [] }], false, (err: any) => (err ? reject(err) : resolve()));
-      });
-
-    // Create
-    await execAsync(`
-      CREATE TABLE IF NOT EXISTS scores (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        mode TEXT NOT NULL,
-        playerScore INTEGER NOT NULL,
-        aiScore INTEGER NOT NULL,
-        firstTo INTEGER,
-        timeSpent INTEGER,
-        targetSeconds INTEGER,
-        createdAt INTEGER NOT NULL
-      );
-    `);
-
-    // Lightweight migrations (ignore if already exists)
-    try {
-      await execAsync(`ALTER TABLE scores ADD COLUMN firstTo INTEGER;`);
-    } catch {}
-    try {
-      await execAsync(`ALTER TABLE scores ADD COLUMN timeSpent INTEGER;`);
-    } catch {}
-    try {
-      await execAsync(`ALTER TABLE scores ADD COLUMN targetSeconds INTEGER;`);
-    } catch {}
-
-    return db;
-  })();
-
-  return _dbPromise;
-}
-
-async function nativeInsert(entry: ScoreEntry): Promise<void> {
-  const db = await getNativeDb();
-
-  return await new Promise<void>((resolve, reject) => {
-    db.transaction((tx: any) => {
-      tx.executeSql(
-        `INSERT INTO scores (name, mode, playerScore, aiScore, firstTo, timeSpent, targetSeconds, createdAt)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          entry.name,
-          normalizeMode(entry.mode),
-          entry.playerScore,
-          entry.aiScore,
-          entry.firstTo ?? null,
-          entry.timeSpent ?? null,
-          entry.targetSeconds ?? null,
-          entry.createdAt,
-        ],
-        () => resolve(),
-        (_: any, err: any) => {
-          reject(err);
-          return false;
-        },
-      );
+    entries.push({
+      id: s.score01_id,
+      name: winner?.player_name ?? (winnerId === AI_PLAYER_ID ? 'COMPUTER' : 'Unknown'),
+      mode: 'FIRST_TO_X',
+      playerScore: myScore,
+      aiScore: oppScore,
+      createdAt: s.score01_created_date,
     });
-  });
-}
-
-async function nativeGetByMode(mode: GameMode, limit = 50): Promise<ScoreEntry[]> {
-  const db = await getNativeDb();
-  const norm = normalizeMode(mode);
-
-  return await new Promise<ScoreEntry[]>((resolve, reject) => {
-    db.transaction((tx: any) => {
-      tx.executeSql(
-        `SELECT id, name, mode, playerScore, aiScore, firstTo, timeSpent, targetSeconds, createdAt
-         FROM scores
-         WHERE mode = ?
-         ORDER BY createdAt DESC
-         LIMIT ?`,
-        [norm, limit],
-        (_: any, res: any) => {
-          const out: ScoreEntry[] = [];
-          for (let i = 0; i < res.rows.length; i++) {
-            const r = res.rows.item(i);
-            out.push({
-              id: r.id,
-              name: r.name,
-              mode: r.mode as GameMode,
-              playerScore: r.playerScore,
-              aiScore: r.aiScore,
-              firstTo: r.firstTo ?? undefined,
-              timeSpent: r.timeSpent ?? undefined,
-              targetSeconds: r.targetSeconds ?? undefined,
-              createdAt: r.createdAt,
-            });
-          }
-          resolve(out);
-        },
-        (_: any, err: any) => {
-          reject(err);
-          return false;
-        },
-      );
-    });
-  });
-}
-
-async function nativeGetTop(limit = 50): Promise<ScoreEntry[]> {
-  const db = await getNativeDb();
-
-  return await new Promise<ScoreEntry[]>((resolve, reject) => {
-    db.transaction((tx: any) => {
-      tx.executeSql(
-        `SELECT id, name, mode, playerScore, aiScore, firstTo, timeSpent, targetSeconds, createdAt
-         FROM scores
-         ORDER BY createdAt DESC
-         LIMIT ?`,
-        [limit],
-        (_: any, res: any) => {
-          const out: ScoreEntry[] = [];
-          for (let i = 0; i < res.rows.length; i++) {
-            const r = res.rows.item(i);
-            out.push({
-              id: r.id,
-              name: r.name,
-              mode: r.mode as GameMode,
-              playerScore: r.playerScore,
-              aiScore: r.aiScore,
-              firstTo: r.firstTo ?? undefined,
-              timeSpent: r.timeSpent ?? undefined,
-              targetSeconds: r.targetSeconds ?? undefined,
-              createdAt: r.createdAt,
-            });
-          }
-          resolve(out);
-        },
-        (_: any, err: any) => {
-          reject(err);
-          return false;
-        },
-      );
-    });
-  });
-}
-
-// ---------------------
-// Public API
-// ---------------------
-
-export async function saveScoreEntry(input: Omit<ScoreEntry, 'createdAt'>): Promise<void> {
-  const entry: ScoreEntry = {
-    ...input,
-    mode: normalizeMode(input.mode),
-    createdAt: Date.now(),
-  };
-
-  if (Platform.OS === 'web') {
-    const scores = readWebScores();
-    scores.unshift(entry);
-    writeWebScores(scores.slice(0, 200));
-    return;
   }
-
-  await nativeInsert(entry);
-}
-
-export async function getScoresByMode(mode: GameMode, limit = 50): Promise<ScoreEntry[]> {
-  if (Platform.OS === 'web') {
-    const scores = readWebScores().filter((s) => normalizeMode(s.mode) === normalizeMode(mode));
-    return scores.slice(0, limit);
-  }
-  return await nativeGetByMode(mode, limit);
+  return entries;
 }
 
 export async function getTopScores(limit = 50): Promise<ScoreEntry[]> {
-  if (Platform.OS === 'web') {
-    return readWebScores().slice(0, limit);
-  }
-  return await nativeGetTop(limit);
+  const firstToX = await getScoresByMode('FIRST_TO_X', limit);
+  //const timeAttack = await getScoresByMode('TIME_ATTACK', limit);
+  // For simplicity and speed in Firestore mode, maybe just return firstToX or combine carefully
+  // Fetching both might be slow, but okay for now.
+  const timeAttack = await getScoresByMode('TIME_ATTACK', limit);
+
+  return [...firstToX, ...timeAttack]
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit);
 }

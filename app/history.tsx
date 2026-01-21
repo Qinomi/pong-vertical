@@ -1,3 +1,4 @@
+import { getUserId } from '@/lib/auth';
 import { GameMode, getScoresByMode, ScoreEntry } from '@/lib/db';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -50,7 +51,9 @@ export default function HistoryScreen() {
     let alive = true;
     setLoading(true);
 
-    getScoresByMode(mode as GameMode, 80)
+    const userId = getUserId();
+
+    getScoresByMode(mode as GameMode, 80, userId || undefined)
       .then((s) => {
         if (!alive) return;
         setScores(s);
@@ -79,7 +82,7 @@ export default function HistoryScreen() {
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </Pressable>
 
-        <Text style={s.headerTitle}>HALL OF FAME</Text>
+        <Text style={s.headerTitle}>HISTORY</Text>
 
         <View style={{ width: 44 }} />
       </View>

@@ -1,3 +1,5 @@
+import { getUserId } from '@/lib/auth';
+import { updateUserProfile } from '@/lib/firestore-user';
 import {
   AI_DIFFICULTY_OPTIONS,
   BALL_SIZE_OPTIONS,
@@ -17,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 type Page = 'HOME' | 'BALLS' | 'PADDLES' | 'GAMEPLAY' | 'AI' | 'PHYSICS';
 
@@ -75,9 +77,52 @@ export default function SettingsScreen() {
   const settings = useSettings();
   const [page, setPage] = useState<Page>('HOME');
 
+  // Profile State
+  const [displayName, setDisplayName] = useState('');
+  const [isUpdatingName, setIsUpdatingName] = useState(false);
+
   useEffect(() => {
     void loadSettingsOnce();
+
+    // Load initial name
+    import('@/lib/auth').then(({ getCurrentUser }) => {
+      const user = getCurrentUser();
+      if (user?.displayName) {
+        setDisplayName(user.displayName);
+      }
+    });
   }, []);
+
+  const handleUpdateName = async () => {
+    if (!displayName.trim()) return;
+
+    const userId = getUserId();
+    if (!userId) return;
+
+    setIsUpdatingName(true);
+    try {
+      const success = await updateUserProfile(userId, displayName.trim());
+      if (success) {
+        // Check platform for alert
+        if (Platform.OS === 'web') {
+          alert('Name updated successfully!');
+        } else {
+          Alert.alert('Success', 'Name updated successfully!');
+        }
+
+        // Also update local auth state hack
+        import('@/lib/auth').then(({ initAuth }) => initAuth());
+      } else {
+        if (Platform.OS === 'web') alert('Failed to update name.');
+        else Alert.alert('Error', 'Failed to update name.');
+      }
+    } catch (e) {
+      if (Platform.OS === 'web') alert('Error updating name.');
+      else Alert.alert('Error', 'Error updating name.');
+    } finally {
+      setIsUpdatingName(false);
+    }
+  };
 
   const pageTitle = useMemo(() => {
     switch (page) {
@@ -127,10 +172,13 @@ export default function SettingsScreen() {
         }
 
         // eslint-disable-next-line no-alert
-        alert('Success: All data and scores have been wiped.');
+        if (Platform.OS === 'web') alert('Success: All data and scores have been wiped.');
+        else Alert.alert('Success', 'All data and scores have been wiped.');
+
       } catch {
         // eslint-disable-next-line no-alert
-        alert('Error: Could not reset data.');
+        if (Platform.OS === 'web') alert('Error: Could not reset data.');
+        else Alert.alert('Error', 'Could not reset data.');
       }
     };
 
@@ -167,9 +215,36 @@ export default function SettingsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.content}>
         {page === 'HOME' && (
           <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>PROFILE</Text>
+
+              <View style={styles.settingItem}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>DISPLAY NAME</Text>
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={styles.textInput}
+                      value={displayName}
+                      onChangeText={setDisplayName}
+                      placeholder="Enter your name"
+                      placeholderTextColor="rgba(255,255,255,0.3)"
+                      maxLength={12}
+                    />
+                    <TouchableOpacity
+                      style={[styles.saveBtn, isUpdatingName && { opacity: 0.5 }]}
+                      onPress={handleUpdateName}
+                      disabled={isUpdatingName}
+                    >
+                      <Text style={styles.saveBtnText}>{isUpdatingName ? '...' : 'SAVE'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </View>
+
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>GENERAL</Text>
 
@@ -202,6 +277,7 @@ export default function SettingsScreen() {
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>TUNING</Text>
+              <Text style={styles.sectionSubtitle}>APPLIES TO LOCAL MODES (FIRST TO X, TIME ATTACK)</Text>
 
               <CategoryRow
                 icon="radio-button-on"
@@ -360,9 +436,9 @@ export default function SettingsScreen() {
             </View>
           </>
         )}
-      </View>
+      </ScrollView>
 
-      <Text style={styles.version}>VERSION 1.4.0 • NEO PONG ARENA</Text>
+      <Text style={styles.version}>VERSION 1.4.1 • NEO PONG ARENA</Text>
     </View>
   );
 }
@@ -393,6 +469,14 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textTransform: 'uppercase',
   },
+  sectionSubtitle: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: -10,
+    marginBottom: 15,
+  },
 
   settingItem: {
     flexDirection: 'row',
@@ -405,6 +489,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
+
+  // New Profile Styles
+  inputContainer: { flex: 1 },
+  inputLabel: { color: '#fff', fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  inputRow: { flexDirection: 'row', gap: 10 },
+  textInput: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    padding: 12,
+    color: '#fff',
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  saveBtn: {
+    backgroundColor: '#00f3ff',
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  saveBtnText: {
+    color: '#000',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+
   labelRow: { flexDirection: 'row', alignItems: 'center' },
   settingLabel: { color: '#fff', fontSize: 16, fontWeight: '700' },
 
