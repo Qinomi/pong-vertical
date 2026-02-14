@@ -43,7 +43,7 @@ npm run start
 - Open app and tap `GUEST` to sign in with anonymous/local identity.
 
 Image example (add your own screenshot):
-![Login Screen](./docs/images/login-screen.png)
+![Login Screen](./images/login-screen.png)
 
 ### 2) Start Game
 - Choose game mode from main menu:
@@ -52,7 +52,7 @@ Image example (add your own screenshot):
 - Configure settings, then start the match.
 
 Image example:
-![Game Mode Selection](./docs/images/game-mode-selection.png)
+![Game Mode Selection](./images/game-mode-selection.png)
 
 ### 3) During Match
 - Play vertical pong.
@@ -60,22 +60,22 @@ Image example:
 - Match data is stored locally first and synced online when available.
 
 Image example:
-![In-Game Screen](./docs/images/in-game-screen.png)
+![In-Game Screen](./images/in-game-screen.png)
 
 ### 4) View History and Leaderboard
 - Open `History` to see previous matches.
 - Open `Leaderboard` to see top entries and compare results.
 
 Image example:
-![History Screen](./docs/images/history-screen.png)
-![Leaderboard Screen](./docs/images/Leaderboard.png)
+![History Screen](./images/history-screen.png)
+![Leaderboard Screen](./images/Leaderboard.png)
 
 ### 5) Settings
 - Update profile/display name.
 - App applies local-first behavior and syncs when network is available.
 
 Image example:
-![Settings Screen](./docs/images/settings-screen.png)
+![Settings Screen](./images/settings-screen.png)
 
 ## API and Data Model (Overview)
 

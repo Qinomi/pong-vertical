@@ -6,7 +6,6 @@ Core gameplay is vertical Pong with multiple modes, local history, and online sy
 ## Documentation
 
 - Full guide: [`How to use.md`](./docs/How%20to%20use.md)
-- Database : [`DB`](./docs/database-documentation.md)
 
 ## Features
 
