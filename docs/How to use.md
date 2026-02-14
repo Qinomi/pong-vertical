@@ -42,7 +42,6 @@ npm run start
 ### 1) Login
 - Open app and tap `GUEST` to sign in with anonymous/local identity.
 
-Image example:
 ![Login Screen](./images/login-screen.png)
 
 ### 2) Start Game
@@ -51,7 +50,6 @@ Image example:
   - `TIME_ATTACK`
 - Configure settings, then start the match.
 
-Image example:
 ![Game Mode Selection](./images/game-mode-selection.png)
 
 ### 3) During Match
@@ -59,14 +57,12 @@ Image example:
 - Score and timer are tracked in real time.
 - Match data is stored locally first and synced online when available.
 
-Image example:
 ![In-Game Screen](./images/in-game-screen.png)
 
 ### 4) View History and Leaderboard
 - Open `History` to see previous matches.
 - Open `Leaderboard` to see top entries and compare results.
 
-Image example:
 ![History Screen](./images/history-screen.png)
 ![Leaderboard Screen](./images/Leaderboard.png)
 
@@ -74,7 +70,6 @@ Image example:
 - Update profile/display name.
 - App applies local-first behavior and syncs when network is available.
 
-Image example:
 ![Settings Screen](./images/settings-screen.png)
 
 ## API and Data Model (Overview)
