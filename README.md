@@ -3,6 +3,10 @@
 Mobile game project built with Expo/React Native.
 Core gameplay is vertical Pong with multiple modes, local history, and online sync-ready data flow.
 
+## Documentation
+
+- Full guide: [`How to use.md`](./How%20to%20use.md)
+
 ## Features
 
 - Play modes: `FIRST_TO_X`, `TIME_ATTACK`
@@ -50,10 +54,10 @@ npm install
 
 ```bash
 # macOS / Linux
-mv .env.example .env
+cp .env.example .env
 
 # Windows PowerShell
-move .env.example .env
+Copy-Item .env.example .env
 ```
 
 3. Fill required values in `.env`
