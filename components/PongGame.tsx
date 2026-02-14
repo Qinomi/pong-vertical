@@ -170,8 +170,18 @@ interface PongGameProps {
 
   onGameOver: (result: GameResult) => void;
   onPausePress: () => void;
-  onOptionsPress: () => void;
-  isExternalPaused: boolean;
+  onOptionsPress?: () => void;
+  isExternalPaused?: boolean;
+
+  // Online mode additions
+  onScoreChange?: (playerScore: number, aiScore: number) => void;
+  forceInsaneAI?: boolean;
+  autoStart?: boolean;          // Skip 'tap to serve', start immediately
+  hideAIScore?: boolean;        // Don't show AI score in UI
+  hideSettings?: boolean;       // Hide settings button
+  opponentName?: string;        // Show opponent name instead of 'AI'
+  opponentScore?: number;       // Show opponent's realtime score
+  ignoreAIScore?: boolean;      // Don't end game when AI reaches score limit (online mode)
 }
 
 export const PongGame: React.FC<PongGameProps> = ({
@@ -181,7 +191,15 @@ export const PongGame: React.FC<PongGameProps> = ({
   onGameOver,
   onPausePress,
   onOptionsPress,
-  isExternalPaused,
+  isExternalPaused = false,
+  onScoreChange,
+  forceInsaneAI = false,
+  autoStart = false,
+  hideAIScore = false,
+  hideSettings = false,
+  opponentName,
+  opponentScore,
+  ignoreAIScore = false,
 }) => {
   const isFocused = useIsFocused();
 
@@ -205,7 +223,8 @@ export const PongGame: React.FC<PongGameProps> = ({
   const [playerScore, setPlayerScore] = useState(0);
   const [aiScore, setAiScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(timeLimit);
-  const [gameStarted, setGameStarted] = useState(false);
+  const [gameStarted, setGameStarted] = useState(autoStart);
+  const gameStartedRef = useRef(gameStarted);
   const [isResetting, setIsResetting] = useState(false);
 
   // Keep timer ref in sync
@@ -214,20 +233,27 @@ export const PongGame: React.FC<PongGameProps> = ({
     timeLeftRef.current = timeLeft;
   }, [timeLeft]);
 
+  // Keep gameStartedRef in sync
+  useEffect(() => {
+    gameStartedRef.current = gameStarted;
+  }, [gameStarted]);
+
   // Reset match state when switching mode or time limit / score limit.
   useEffect(() => {
     setPlayerScore(0);
     setAiScore(0);
-    setGameStarted(false);
+    setGameStarted(autoStart); // Keep autoStart state
     setIsResetting(false);
     if (mode === 'TIME_ATTACK') setTimeLeft(timeLimit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, scoreLimit, timeLimit]);
+  }, [mode, scoreLimit, timeLimit, autoStart]);
 
   const gameOverOnceRef = useRef(false);
   useEffect(() => {
     if (gameStarted) gameOverOnceRef.current = false;
   }, [gameStarted, mode, scoreLimit, timeLimit]);
+
+  // autoStart useEffect moved after resetBall declaration
 
   // -----------------------------
   // Live API modifier (Open-Meteo)
@@ -426,7 +452,7 @@ export const PongGame: React.FC<PongGameProps> = ({
 
   // Keep refs in sync if user changes settings while the game is alive.
   useEffect(() => {
-    return subscribeSettings(() => {
+    const unsubscribe = subscribeSettings(() => {
       const next = resolveTuning(getSettingsSync());
       tuningRef.current = next;
 
@@ -451,6 +477,7 @@ export const PongGame: React.FC<PongGameProps> = ({
         top: ballPos.current.y,
       });
     });
+    return () => { unsubscribe(); };
   }, [arenaH]);
 
   // If the game container height changes (web resize / orientation change),
@@ -512,10 +539,23 @@ export const PongGame: React.FC<PongGameProps> = ({
     [arenaH],
   );
 
+  // Auto-start: trigger ball reset when autoStart is on
+  const autoStartTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoStart && !autoStartTriggeredRef.current && arenaH > 0) {
+      autoStartTriggeredRef.current = true;
+      // Serve the ball after a small delay
+      setTimeout(() => {
+        const direction = Math.random() > 0.5 ? 1 : -1;
+        resetBall(direction);
+      }, 300);
+    }
+  }, [autoStart, arenaH, resetBall]);
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => gameStartedRef.current,
+      onMoveShouldSetPanResponder: () => gameStartedRef.current,
       onPanResponderMove: (_, gestureState) => {
         const paddleW = tuningRef.current.paddleWidthPx;
         let newX = gestureState.moveX - paddleW / 2;
@@ -582,6 +622,17 @@ export const PongGame: React.FC<PongGameProps> = ({
 
       triggerHaptic();
       updateStyle(ballRef, { backgroundColor: '#00f3ff' });
+
+      // Special Online Mode: Score on return
+      // Since AI is insane (unbeatable), we count successful returns as points
+      if (ignoreAIScore) {
+        setPlayerScore((s) => {
+          const newScore = s + 1;
+          // Notify parent immediately
+          if (onScoreChange) setTimeout(() => onScoreChange(newScore, aiScore), 0);
+          return newScore;
+        });
+      }
     }
 
     // AI collision
@@ -623,22 +674,37 @@ export const PongGame: React.FC<PongGameProps> = ({
       }
     } else {
       if (ballPos.current.y < 0) {
-        setPlayerScore((s) => s + 1);
+        // Player scored (ball went past AI)
+        const newPlayerScore = playerScore + 1;
+        setPlayerScore(newPlayerScore);
+        if (onScoreChange) {
+          // Use setTimeout to ensure state is updated
+          setTimeout(() => onScoreChange(newPlayerScore, aiScore), 0);
+        }
         resetBall(1);
       } else if (ballPos.current.y > arenaH) {
-        setAiScore((s) => s + 1);
+        // AI scored (ball went past player) - in online mode this shouldn't affect opponent
+        const newAiScore = aiScore + 1;
+        setAiScore(newAiScore);
+        // Don't call onScoreChange for AI scores in online mode
         resetBall(-1);
       }
     }
 
     // AI movement
     const aiTarget = ballPos.current.x + ballSize / 2 - paddleW / 2;
-    const baseAiSpeed = mode === 'TIME_ATTACK' ? 5.2 : 4.0;
-    const aiSpeed = baseAiSpeed * wx.aiMul * bat.aiMul;
 
-    if (Math.abs(aiX.current - aiTarget) > 5) {
-      if (aiX.current < aiTarget) aiX.current += aiSpeed;
-      else aiX.current -= aiSpeed;
+    if (forceInsaneAI) {
+      // Insane mode: AI instantly moves to ball position (catches everything)
+      aiX.current = clamp(aiTarget, 0, SCREEN_WIDTH - paddleW);
+    } else {
+      const baseAiSpeed = mode === 'TIME_ATTACK' ? 5.2 : 4.0;
+      const aiSpeed = baseAiSpeed * wx.aiMul * bat.aiMul;
+
+      if (Math.abs(aiX.current - aiTarget) > 5) {
+        if (aiX.current < aiTarget) aiX.current += aiSpeed;
+        else aiX.current -= aiSpeed;
+      }
     }
 
     aiX.current = clamp(aiX.current, 0, SCREEN_WIDTH - paddleW);
@@ -674,7 +740,12 @@ export const PongGame: React.FC<PongGameProps> = ({
   }, [mode, isFocused, gameStarted, isExternalPaused]);
 
   useEffect(() => {
-    if ((mode === 'FIRST_TO_5' || mode === 'FIRST_TO_X') && scoreLimit !== null && (playerScore >= scoreLimit || aiScore >= scoreLimit)) {
+    // For online mode (ignoreAIScore=true), only check if PLAYER reaches target
+    // For normal mode, check if either player or AI reaches target
+    const playerWon = scoreLimit !== null && playerScore >= scoreLimit;
+    const aiWon = scoreLimit !== null && aiScore >= scoreLimit && !ignoreAIScore;
+
+    if ((mode === 'FIRST_TO_5' || mode === 'FIRST_TO_X') && (playerWon || aiWon)) {
       setGameStarted(false);
       onGameOver({ playerScore, aiScore, mode, firstTo: scoreLimit });
     } else if (mode === 'TIME_ATTACK' && timeLeft <= 0) {
@@ -749,31 +820,39 @@ export const PongGame: React.FC<PongGameProps> = ({
             </View>
           )}
 
-          <View style={styles.rightCluster}>
-            <TouchableOpacity onPress={onOptionsPress} style={styles.pauseBtn}>
-              <Ionicons name="options" size={24} color="#00f3ff" />
-            </TouchableOpacity>
-          </View>
+          {!hideSettings && onOptionsPress && (
+            <View style={styles.rightCluster}>
+              <TouchableOpacity onPress={onOptionsPress} style={styles.pauseBtn}>
+                <Ionicons name="options" size={24} color="#00f3ff" />
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </View>
 
-      <View style={styles.hud}>
-        <View style={styles.pointsDisplay}>
-          <View style={[styles.pBox, styles.pBoxLeft, { borderLeftColor: '#ff00ff' }]}>
-            <Text style={styles.pLabel}>{mode === 'TIME_ATTACK' ? 'BREACH' : 'AI'}</Text>
-            <Text style={[styles.pScore, { color: '#ff00ff' }]}>{aiScore}</Text>
+      {!hideAIScore && (
+        <View style={styles.hud}>
+          <View style={styles.pointsDisplay}>
+            <View style={[styles.pBox, styles.pBoxLeft, { borderLeftColor: '#ff00ff' }]}>
+              <Text style={styles.pLabel}>
+                {opponentName ? opponentName.toUpperCase() : (mode === 'TIME_ATTACK' ? 'BREACH' : 'AI')}
+              </Text>
+              <Text style={[styles.pScore, { color: '#ff00ff' }]}>
+                {typeof opponentScore === 'number' ? opponentScore : aiScore}
+              </Text>
+            </View>
+
+            <View style={[styles.pBox, styles.pBoxRight, { borderRightColor: '#00f3ff', alignItems: 'flex-end' }]}>
+              <Text style={styles.pLabel}>YOU</Text>
+              <Text style={[styles.pScore, { color: '#00f3ff' }]}>{survivedSoFar}</Text>
+            </View>
           </View>
 
-          <View style={[styles.pBox, styles.pBoxRight, { borderRightColor: '#00f3ff', alignItems: 'flex-end' }]}>
-            <Text style={styles.pLabel}>YOU</Text>
-            <Text style={[styles.pScore, { color: '#00f3ff' }]}>{survivedSoFar}</Text>
-          </View>
+          {mode === 'TIME_ATTACK' && (
+            <Text style={styles.targetHint}>TARGET: {timeLimit}s</Text>
+          )}
         </View>
-
-        {mode === 'TIME_ATTACK' && (
-          <Text style={styles.targetHint}>TARGET: {timeLimit}s</Text>
-        )}
-      </View>
+      )}
 
       <View ref={aiRef} style={[styles.paddle, styles.aiPaddle, { top: aiY, left: aiX.current, width: t.paddleWidthPx }]} />
       <View

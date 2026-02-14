@@ -1,11 +1,13 @@
 import { GameMode, GameResult, PongGame } from '@/components/PongGame';
-import { saveScoreEntry } from '@/lib/db';
+import { getUserId } from '@/lib/auth';
+import { AI_PLAYER_ID, createOrGetPlayer } from '@/lib/db';
+import { saveFirstToXWithSync, saveTimeAttackWithSync } from '@/lib/sync';
+import { styles } from '@/styles/styles';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Modal, Text, TouchableOpacity, View } from 'react-native';
-import { styles } from './styles';
 
 function parseIntParam(v: unknown): number | null {
   if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
@@ -31,6 +33,7 @@ function isWinResult(result: GameResult, fallbackTimeLimit: number): boolean {
 
 export default function GameScreen() {
   const params = useLocalSearchParams();
+  const userId = getUserId(); // Get logged in user ID
 
   const mode = (params.mode as GameMode) ?? 'FIRST_TO_5';
   const playerName = (params.name as string) ?? 'YOU';
@@ -52,12 +55,15 @@ export default function GameScreen() {
   const [gameOverVisible, setGameOverVisible] = useState(false);
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<GameResult | null>(null);
+  const [isSaved, setIsSaved] = useState(false); // Validating double save
 
   const win = useMemo(() => (result ? isWinResult(result, timeLimitSeconds) : false), [result, timeLimitSeconds]);
 
   const handleGameOver = (r: GameResult) => {
+    if (gameOverVisible) return; // Prevent multiple triggers
     setResult(r);
     setGameOverVisible(true);
+    setIsSaved(false); // Reset save state
 
     // small “sync” / “processing” phase for the vibe
     setChecking(true);
@@ -67,23 +73,75 @@ export default function GameScreen() {
   const handleFinalSaveAndLeaderboard = async () => {
     if (!result) return;
 
-    const histMode = normalizeModeForHistory(result.mode);
+    // Check if already saved
+    if (!isSaved) {
+      setIsSaved(true);
+      const histMode = normalizeModeForHistory(result.mode);
+      const player = await createOrGetPlayer(playerName, userId || undefined); // Use real User ID
 
-    await saveScoreEntry({
-      name: playerName,
-      mode: histMode,
-      playerScore: result.playerScore,
-      aiScore: result.aiScore,
-      firstTo: result.firstTo,
-      timeSpent: result.timeSpent,
-      targetSeconds: result.targetSeconds,
-    });
+      if (histMode === 'TIME_ATTACK') {
+        const isWin = result.aiScore === 0;
+        await saveTimeAttackWithSync(
+          {
+            playerId: player.player_id,
+            verdict: isWin ? 'WIN' : 'LOSE',
+            timeDuration: result.timeSpent ?? result.playerScore,
+          },
+          { playerName, isOnlineMode: false }
+        );
+      } else {
+        const isPlayerWin = result.playerScore > result.aiScore;
+        await saveFirstToXWithSync(
+          {
+            playerId: player.player_id,
+            opponentId: AI_PLAYER_ID,
+            playerScore: result.playerScore,
+            opponentScore: result.aiScore,
+            winnerId: isPlayerWin ? player.player_id : AI_PLAYER_ID,
+            timeElapsed: result.timeSpent ?? 0,
+          },
+          { playerName, isOnlineMode: false }
+        );
+      }
+    }
 
     setGameOverVisible(false);
-    router.replace({ pathname: '/history', params: { mode: histMode } });
+    // Use replace to avoid stacking
+    router.replace({ pathname: '/history', params: { mode: normalizeModeForHistory(result.mode) } });
   };
 
-  const backToMenu = () => {
+  const backToMenu = async () => {
+    // Save score check
+    if (result && !isSaved) {
+      setIsSaved(true);
+      const histMode = normalizeModeForHistory(result.mode);
+      const player = await createOrGetPlayer(playerName, userId || undefined); // Use real User ID
+
+      if (histMode === 'TIME_ATTACK') {
+        const isWin = result.aiScore === 0;
+        await saveTimeAttackWithSync(
+          {
+            playerId: player.player_id,
+            verdict: isWin ? 'WIN' : 'LOSE',
+            timeDuration: result.timeSpent ?? result.playerScore,
+          },
+          { playerName, isOnlineMode: false }
+        );
+      } else {
+        const isPlayerWin = result.playerScore > result.aiScore;
+        await saveFirstToXWithSync(
+          {
+            playerId: player.player_id,
+            opponentId: AI_PLAYER_ID,
+            playerScore: result.playerScore,
+            opponentScore: result.aiScore,
+            winnerId: isPlayerWin ? player.player_id : AI_PLAYER_ID,
+            timeElapsed: result.timeSpent ?? 0,
+          },
+          { playerName, isOnlineMode: false }
+        );
+      }
+    }
     setGameOverVisible(false);
     setPauseVisible(false);
     router.replace('/');
@@ -201,7 +259,7 @@ export default function GameScreen() {
                 </View>
 
                 <TouchableOpacity style={styles.primaryBtn} onPress={handleFinalSaveAndLeaderboard}>
-                  <Text style={styles.primaryBtnText}>VIEW LEADERBOARD</Text>
+                  <Text style={styles.primaryBtnText}>VIEW HISTORY</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.menuBtn} onPress={backToMenu}>

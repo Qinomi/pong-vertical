@@ -1,9 +1,9 @@
+import { styles } from '@/styles/styles';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { styles } from './styles';
 
 type Overlay =
   | 'NONE'
@@ -98,6 +98,11 @@ export default function HomeScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.menuBtn} onPress={() => router.push('/history')}>
+          <Ionicons name="list" size={20} color="#fff" style={{ marginRight: 10 }} />
+          <Text style={styles.menuBtnText}>HISTORY</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.menuBtn} onPress={() => router.push('/leaderboard')}>
           <Ionicons name="trophy" size={20} color="#fff" style={{ marginRight: 10 }} />
           <Text style={styles.menuBtnText}>HALL OF FAME</Text>
         </TouchableOpacity>
@@ -110,14 +115,14 @@ export default function HomeScreen() {
             <Text style={styles.menuTitle}>GAME MODE</Text>
             <Text style={styles.subtitle}>Choose your protocol.</Text>
 
-            <TouchableOpacity style={styles.menuBtn} onPress={startFirstTo5}>
-              <Ionicons name="flash" size={20} color="#fff" style={{ marginRight: 10 }} />
-              <Text style={styles.menuBtnText}>FIRST TO 5</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity style={styles.menuBtn} onPress={() => setOverlay('FIRST_TO_X_MENU')}>
               <Ionicons name="keypad" size={20} color="#fff" style={{ marginRight: 10 }} />
               <Text style={styles.menuBtnText}>FIRST TO X</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuBtn} onPress={() => router.push('/online-lobby')}>
+              <Ionicons name="globe" size={20} color="#fff" style={{ marginRight: 10 }} />
+              <Text style={styles.menuBtnText}>FIRST TO X ONLINE</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.menuBtn} onPress={() => setOverlay('TIME_ATTACK_MENU')}>

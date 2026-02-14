@@ -1,9 +1,11 @@
-import { GameMode, getScoresByMode, ScoreEntry } from '@/lib/db';
+import { getUserId } from '@/lib/auth';
+import { deleteHistoryScoreByMode, GameMode, getScoresByMode, ScoreEntry } from '@/lib/db';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 
 type HistoryMode = 'FIRST_TO_X' | 'TIME_ATTACK';
 
@@ -40,6 +42,12 @@ export default function HistoryScreen() {
   const [mode, setMode] = useState<HistoryMode>(initialMode);
   const [scores, setScores] = useState<ScoreEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchScores = useCallback(async () => {
+    const userId = getUserId();
+    return getScoresByMode(mode as GameMode, 80, userId || undefined);
+  }, [mode]);
 
   useEffect(() => {
     setMode(initialMode);
@@ -50,7 +58,7 @@ export default function HistoryScreen() {
     let alive = true;
     setLoading(true);
 
-    getScoresByMode(mode as GameMode, 80)
+    fetchScores()
       .then((s) => {
         if (!alive) return;
         setScores(s);
@@ -63,15 +71,74 @@ export default function HistoryScreen() {
     return () => {
       alive = false;
     };
-  }, [mode]);
+  }, [fetchScores]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const s = await fetchScores();
+      setScores(s);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchScores]);
 
   const stats = useMemo(() => {
     const w = scores.filter(isWin).length;
     return { total: scores.length, wins: w, losses: scores.length - w };
   }, [scores]);
 
+  // Swipeable refs for closing
+  const swipeableRefs = useRef<Map<string, Swipeable>>(new Map());
+
+  // Handle delete
+  const handleDelete = useCallback(async (entry: ScoreEntry) => {
+    const scoreId = String(entry.id);
+
+    Alert.alert(
+      'ลบประวัติ',
+      'คุณต้องการลบประวัติการเล่นนี้หรือไม่?',
+      [
+        {
+          text: 'ยกเลิก', style: 'cancel', onPress: () => {
+            // Close swipeable
+            swipeableRefs.current.get(scoreId)?.close();
+          }
+        },
+        {
+          text: 'ลบ',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteHistoryScoreByMode(mode, scoreId);
+
+              // Remove from state
+              setScores(prev => prev.filter(s => String(s.id) !== scoreId));
+            } catch (error) {
+              console.warn('Delete failed:', error);
+              Alert.alert('เกิดข้อผิดพลาด', 'ไม่สามารถลบข้อมูลได้');
+            }
+          }
+        },
+      ]
+    );
+  }, [mode]);
+
+  // Render delete action (right swipe)
+  const renderRightActions = useCallback((entry: ScoreEntry) => {
+    return (
+      <Pressable
+        style={s.deleteAction}
+        onPress={() => handleDelete(entry)}
+      >
+        <Ionicons name="trash-outline" size={24} color="#fff" />
+        <Text style={s.deleteText}>ลบ</Text>
+      </Pressable>
+    );
+  }, [handleDelete]);
+
   return (
-    <View style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <LinearGradient colors={['#020024', '#1a237e', '#080808']} style={StyleSheet.absoluteFillObject} />
 
       <View style={s.header}>
@@ -79,7 +146,7 @@ export default function HistoryScreen() {
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </Pressable>
 
-        <Text style={s.headerTitle}>HALL OF FAME</Text>
+        <Text style={s.headerTitle}>HISTORY</Text>
 
         <View style={{ width: 44 }} />
       </View>
@@ -111,15 +178,25 @@ export default function HistoryScreen() {
           <ActivityIndicator size="large" color="#00f3ff" />
           <Text style={s.loadingText}>LOADING SCORES…</Text>
         </View>
-      ) : scores.length === 0 ? (
-        <View style={s.center}>
-          <Ionicons name="trophy-outline" size={42} color="rgba(255,255,255,0.45)" />
-          <Text style={s.emptyTitle}>NO ENTRIES YET</Text>
-          <Text style={s.emptySub}>Play a match to record your first run.</Text>
-        </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 30 }}>
-          {scores.map((entry, idx) => {
+        <ScrollView
+          contentContainerStyle={scores.length === 0 ? s.emptyContent : { padding: 16, paddingBottom: 30 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#00f3ff"
+              colors={['#00f3ff']}
+            />
+          }
+        >
+          {scores.length === 0 ? (
+            <View style={s.center}>
+              <Ionicons name="trophy-outline" size={42} color="rgba(255,255,255,0.45)" />
+              <Text style={s.emptyTitle}>NO ENTRIES YET</Text>
+              <Text style={s.emptySub}>Play a match to record your first run.</Text>
+            </View>
+          ) : scores.map((entry, idx) => {
             const win = isWin(entry);
             const verdictColor = win ? '#00f3ff' : '#ff4b2b';
             const date = fmtDate(entry.createdAt);
@@ -128,8 +205,55 @@ export default function HistoryScreen() {
               const survived = entry.timeSpent ?? entry.playerScore ?? 0;
               const target = entry.targetSeconds ?? 60;
 
+              const scoreId = String(entry.id ?? idx);
+
               return (
-                <View key={String(entry.id ?? idx)} style={s.card}>
+                <Swipeable
+                  key={scoreId}
+                  ref={(ref) => {
+                    if (ref) swipeableRefs.current.set(scoreId, ref);
+                  }}
+                  renderRightActions={() => renderRightActions(entry)}
+                  overshootRight={false}
+                >
+                  <View style={s.card}>
+                    <View style={s.cardTop}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.nameText} numberOfLines={1}>
+                          {entry.name || 'YOU'}
+                        </Text>
+                        <Text style={s.dateText}>{date}</Text>
+                      </View>
+
+                      <View style={[s.badge, { borderColor: verdictColor }]}>
+                        <Text style={[s.badgeText, { color: verdictColor }]}>{win ? 'WIN' : 'LOSS'}</Text>
+                      </View>
+                    </View>
+
+                    <View style={s.cardMid}>
+                      <Text style={s.modeHint}>SURVIVED</Text>
+                      <Text style={[s.bigVal, { color: verdictColor }]}>{survived}s</Text>
+                      <Text style={s.smallHint}>TARGET {target}s • BREACHES {entry.aiScore}</Text>
+                    </View>
+                  </View>
+                </Swipeable>
+              );
+            }
+
+            // FIRST_TO_X
+            const firstTo = entry.firstTo ?? 5;
+            const scoreId = String(entry.id ?? idx);
+
+            return (
+              <Swipeable
+                key={scoreId}
+                ref={(ref) => {
+                  if (ref) swipeableRefs.current.set(scoreId, ref);
+                }}
+                renderRightActions={() => renderRightActions(entry)}
+                overshootRight={false}
+              >
+                <View style={s.card}>
                   <View style={s.cardTop}>
                     <View style={{ flex: 1 }}>
                       <Text style={s.nameText} numberOfLines={1}>
@@ -144,46 +268,21 @@ export default function HistoryScreen() {
                   </View>
 
                   <View style={s.cardMid}>
-                    <Text style={s.modeHint}>SURVIVED</Text>
-                    <Text style={[s.bigVal, { color: verdictColor }]}>{survived}s</Text>
-                    <Text style={s.smallHint}>TARGET {target}s • BREACHES {entry.aiScore}</Text>
+                    <Text style={s.modeHint}>SCORE</Text>
+                    <View style={s.scoreRow}>
+                      <Text style={[s.scoreNum, { color: win ? '#00f3ff' : verdictColor }]}>{entry.playerScore}</Text>
+                      <Text style={s.scoreSep}>:</Text>
+                      <Text style={[s.scoreNum, { color: '#ff00ff' }]}>{entry.aiScore}</Text>
+                    </View>
+                    <Text style={s.smallHint}>FIRST TO {firstTo}</Text>
                   </View>
                 </View>
-              );
-            }
-
-            // FIRST_TO_X
-            const firstTo = entry.firstTo ?? 5;
-            return (
-              <View key={String(entry.id ?? idx)} style={s.card}>
-                <View style={s.cardTop}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.nameText} numberOfLines={1}>
-                      {entry.name || 'YOU'}
-                    </Text>
-                    <Text style={s.dateText}>{date}</Text>
-                  </View>
-
-                  <View style={[s.badge, { borderColor: verdictColor }]}>
-                    <Text style={[s.badgeText, { color: verdictColor }]}>{win ? 'WIN' : 'LOSS'}</Text>
-                  </View>
-                </View>
-
-                <View style={s.cardMid}>
-                  <Text style={s.modeHint}>SCORE</Text>
-                  <View style={s.scoreRow}>
-                    <Text style={[s.scoreNum, { color: win ? '#00f3ff' : verdictColor }]}>{entry.playerScore}</Text>
-                    <Text style={s.scoreSep}>:</Text>
-                    <Text style={[s.scoreNum, { color: '#ff00ff' }]}>{entry.aiScore}</Text>
-                  </View>
-                  <Text style={s.smallHint}>FIRST TO {firstTo}</Text>
-                </View>
-              </View>
+              </Swipeable>
             );
           })}
         </ScrollView>
       )}
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
@@ -243,6 +342,7 @@ const s = StyleSheet.create({
 
   emptyTitle: { marginTop: 12, color: '#fff', fontSize: 16, fontWeight: '900', letterSpacing: 3 },
   emptySub: { marginTop: 6, color: 'rgba(255,255,255,0.55)', textAlign: 'center' },
+  emptyContent: { flexGrow: 1, justifyContent: 'center', padding: 24 },
 
   card: {
     borderRadius: 20,
@@ -274,4 +374,22 @@ const s = StyleSheet.create({
   scoreRow: { marginTop: 4, flexDirection: 'row', alignItems: 'baseline', gap: 8 },
   scoreNum: { fontSize: 44, fontWeight: '900' },
   scoreSep: { fontSize: 30, fontWeight: '900', color: 'rgba(255,255,255,0.35)' },
+
+  // Swipe delete styles
+  deleteAction: {
+    backgroundColor: '#ff4b2b',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    height: '100%',
+    borderRadius: 20,
+    marginBottom: 12,
+    marginLeft: 8,
+  },
+  deleteText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+    marginTop: 4,
+  },
 });

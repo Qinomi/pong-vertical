@@ -1,11 +1,11 @@
 import { GameMode, GameResult, PongGame } from '@/components/PongGame';
 import { saveScore } from '@/lib/db';
+import { styles } from '@/styles/styles';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { ActivityIndicator, Modal, Text, TouchableOpacity, View } from 'react-native';
-import { styles } from './styles';
 
 export default function GameScreen() {
     const router = useRouter();
