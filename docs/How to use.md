@@ -42,7 +42,7 @@ npm run start
 ### 1) Login
 - Open app and tap `GUEST` to sign in with anonymous/local identity.
 
-Image example (add your own screenshot):
+Image example:
 ![Login Screen](./images/login-screen.png)
 
 ### 2) Start Game
