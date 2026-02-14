@@ -40,16 +40,42 @@ pong-vertical/
 
 ## Quick Start
 
+1. Install dependencies
+
 ```bash
 npm install
+```
+
+2. Create environment file from template
+
+```bash
+# macOS / Linux
+cp .env.example .env
+
+# Windows PowerShell
+Copy-Item .env.example .env
+```
+
+3. Fill required values in `.env`
+
+- `EXPO_PUBLIC_FIREBASE_DATABASE_URL`
+- `EXPO_PUBLIC_FIRESTORE_BASE_URL`
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID`
+
+4. Start Expo development server
+
+```bash
 npm run start
 ```
 
-Useful scripts:
+5. Run on target platform
 
-- `npm run android`
-- `npm run ios`
-- `npm run web`
+- Android: `npm run android`
+- iOS: `npm run ios`
+- Web: `npm run web`
+
+Other useful command:
+
 - `npm run lint`
 
 ## Environment and Git Hygiene
