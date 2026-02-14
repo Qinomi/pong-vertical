@@ -86,6 +86,7 @@ export default function GameScreen() {
             playerId: player.player_id,
             verdict: isWin ? 'WIN' : 'LOSE',
             timeDuration: result.timeSpent ?? result.playerScore,
+            targetSeconds: result.targetSeconds ?? timeLimitSeconds,
           },
           { playerName, isOnlineMode: false }
         );
@@ -99,6 +100,7 @@ export default function GameScreen() {
             opponentScore: result.aiScore,
             winnerId: isPlayerWin ? player.player_id : AI_PLAYER_ID,
             timeElapsed: result.timeSpent ?? 0,
+            targetScore: result.firstTo ?? firstTo,
           },
           { playerName, isOnlineMode: false }
         );
@@ -124,6 +126,7 @@ export default function GameScreen() {
             playerId: player.player_id,
             verdict: isWin ? 'WIN' : 'LOSE',
             timeDuration: result.timeSpent ?? result.playerScore,
+            targetSeconds: result.targetSeconds ?? timeLimitSeconds,
           },
           { playerName, isOnlineMode: false }
         );
@@ -137,6 +140,7 @@ export default function GameScreen() {
             opponentScore: result.aiScore,
             winnerId: isPlayerWin ? player.player_id : AI_PLAYER_ID,
             timeElapsed: result.timeSpent ?? 0,
+            targetScore: result.firstTo ?? firstTo,
           },
           { playerName, isOnlineMode: false }
         );
@@ -262,7 +266,7 @@ export default function GameScreen() {
                   <Text style={styles.primaryBtnText}>VIEW HISTORY</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.menuBtn} onPress={backToMenu}>
+                <TouchableOpacity style={[styles.menuBtn, { marginTop: 10 }]} onPress={backToMenu}>
                   <Ionicons name="home" size={20} color="#fff" style={{ marginRight: 10 }} />
                   <Text style={styles.menuBtnText}>BACK TO MENU</Text>
                 </TouchableOpacity>

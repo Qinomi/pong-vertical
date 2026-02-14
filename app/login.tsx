@@ -8,7 +8,6 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 export default function LoginScreen() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-
     const handleGuestLogin = async () => {
         setLoading(true);
         setError(null);
