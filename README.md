@@ -1,50 +1,60 @@
-# Welcome to your Expo app 👋
+# Pong Vertical
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Mobile game project built with Expo/React Native.
+Core gameplay is vertical Pong with multiple modes, local history, and online sync-ready data flow.
 
-## Get started
+## Features
 
-1. Install dependencies
+- Play modes: `FIRST_TO_5`, `FIRST_TO_X`, `TIME_ATTACK`
+- Online lobby/game flow (`online-lobby`, `online-game`)
+- Match history and leaderboard screens
+- Local-first persistence (SQLite) with remote sync (Firebase/Firestore)
+- Expo Router based navigation
 
-   ```bash
-   npm install
-   ```
+## Tech Stack
 
-2. Start the app
+- Framework: Expo + React Native + TypeScript
+- Navigation: Expo Router
+- UI: React Native components + `expo-linear-gradient` + `@expo/vector-icons`
+- Local storage: `expo-sqlite`, `@react-native-async-storage/async-storage`
+- Backend/Sync: Firebase Firestore (REST + Firebase SDK packages)
+- Network awareness: `@react-native-community/netinfo`
+- Tooling: ESLint (Expo config)
 
-   ```bash
-   npx expo start
-   ```
+## Project Structure
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```text
+pong-vertical/
+|-- app/                  # Routes/screens (Expo Router)
+|-- components/           # Reusable UI and game components
+|-- lib/                  # Data layer (db, sqlite, sync, firebase, network)
+|-- hooks/                # React hooks
+|-- constants/            # Shared constants
+|-- styles/               # Shared styling
+|-- assets/               # Images/icons
+|-- docs/                 # Project documentation
+|-- archive/              # Old/experimental file variants (not used at runtime)
+|-- scripts/              # Utility scripts
+`-- README.md
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Quick Start
 
-## Learn more
+```bash
+npm install
+npm run start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+Useful scripts:
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- `npm run android`
+- `npm run ios`
+- `npm run web`
+- `npm run lint`
 
-## Join the community
+## Environment and Git Hygiene
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Do not commit secrets in `.env` files.
+- Keep local config in `.env` (ignored by git).
+- If needed, share template values in `.env.example` only.
+- `node_modules/` and build/cache artifacts are ignored by `.gitignore`.
