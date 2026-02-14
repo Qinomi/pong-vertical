@@ -46,6 +46,7 @@ export interface ScoreFirstToX {
   score01_player1: number; // Player 2's score
   score01_winner: string; // player_id of winner
   score01_time_elapse: number; // seconds
+  score01_target?: number; // target score (e.g. 3/5/7/10)
   score01_created_date: number; // epoch ms
 }
 
@@ -54,6 +55,7 @@ export interface ScoreTimeAttackX {
   player_id: string; // FK - Player
   score02_verdict: string; // 'WIN' | 'LOSE'
   score02_time_duration: number; // seconds survived
+  score02_target_seconds?: number; // configured time target
   score02_created_date: number; // epoch ms
 }
 
@@ -142,6 +144,7 @@ async function cacheRemoteFirstToXScores(remoteScores: ScoreFirstToX[]): Promise
             score01_player1: item.score01_player1,
             score01_winner: item.score01_winner,
             score01_time_elapse: item.score01_time_elapse,
+            score01_target: item.score01_target,
             score01_created_date: item.score01_created_date,
           });
           await sqliteMarkFirstToXSynced(item.score01_id);
@@ -163,6 +166,7 @@ async function cacheRemoteTimeAttackScores(remoteScores: ScoreTimeAttackX[]): Pr
             player_id: item.player_id,
             score02_verdict: item.score02_verdict,
             score02_time_duration: item.score02_time_duration,
+            score02_target_seconds: item.score02_target_seconds,
             score02_created_date: item.score02_created_date,
           });
           await sqliteMarkTimeAttackSynced(item.score02_id);
@@ -259,6 +263,7 @@ export interface SaveFirstToXInput {
   opponentScore: number;
   winnerId: number | string;
   timeElapsed: number; // seconds
+  targetScore?: number;
   isOnline?: boolean;
 }
 
@@ -276,6 +281,7 @@ export async function saveFirstToXScore(input: SaveFirstToXInput): Promise<void>
       score01_player1: input.opponentScore,
       score01_winner: String(input.winnerId),
       score01_time_elapse: input.timeElapsed,
+      score01_target: input.targetScore,
       score01_created_date: createdDate,
     });
     console.log('Saved to SQLite:', scoreId);
@@ -293,6 +299,7 @@ export async function saveFirstToXScore(input: SaveFirstToXInput): Promise<void>
         score01_player1: input.opponentScore,
         score01_winner: String(input.winnerId),
         score01_time_elapse: input.timeElapsed,
+        score01_target: input.targetScore,
         score01_created_date: createdDate,
         is_online: input.isOnline || false,
       },
@@ -340,6 +347,7 @@ export interface SaveTimeAttackInput {
   playerId: number | string;
   verdict: 'WIN' | 'LOSE';
   timeDuration: number; // seconds survived
+  targetSeconds?: number;
   isOnline?: boolean;
 }
 
@@ -354,6 +362,7 @@ export async function saveTimeAttackScore(input: SaveTimeAttackInput): Promise<v
       player_id: String(input.playerId),
       score02_verdict: input.verdict,
       score02_time_duration: input.timeDuration,
+      score02_target_seconds: input.targetSeconds,
       score02_created_date: createdDate,
     });
     console.log('Saved TimeAttack to SQLite:', scoreId);
@@ -368,6 +377,7 @@ export async function saveTimeAttackScore(input: SaveTimeAttackInput): Promise<v
         player_id: String(input.playerId),
         score02_verdict: input.verdict,
         score02_time_duration: input.timeDuration,
+        score02_target_seconds: input.targetSeconds,
         score02_created_date: createdDate,
         is_online: input.isOnline || false,
       },
@@ -495,6 +505,7 @@ export async function getScoresByMode(mode: GameMode, limit = 50, userId?: strin
         playerScore: s.score02_time_duration,
         aiScore: s.score02_verdict === 'WIN' ? 0 : 1,
         timeSpent: s.score02_time_duration,
+        targetSeconds: s.score02_target_seconds,
         createdAt: s.score02_created_date,
       });
     }
@@ -525,6 +536,7 @@ export async function getScoresByMode(mode: GameMode, limit = 50, userId?: strin
       mode: 'FIRST_TO_X',
       playerScore: myScore,
       aiScore: oppScore,
+      firstTo: s.score01_target ?? Math.max(s.score01_player, s.score01_player1),
       createdAt: s.score01_created_date,
     });
   }

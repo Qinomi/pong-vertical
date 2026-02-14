@@ -3,9 +3,13 @@
 Mobile game project built with Expo/React Native.
 Core gameplay is vertical Pong with multiple modes, local history, and online sync-ready data flow.
 
+## Documentation
+
+- Full guide: [`How to use.md`](./docs/How%20to%20use.md)
+
 ## Features
 
-- Play modes: `FIRST_TO_5`, `FIRST_TO_X`, `TIME_ATTACK`
+- Play modes: `FIRST_TO_X`, `TIME_ATTACK`
 - Online lobby/game flow (`online-lobby`, `online-game`)
 - Match history and leaderboard screens
 - Local-first persistence (SQLite) with remote sync (Firebase/Firestore)
@@ -40,16 +44,42 @@ pong-vertical/
 
 ## Quick Start
 
+1. Install dependencies
+
 ```bash
 npm install
+```
+
+2. Create environment file from template
+
+```bash
+# macOS / Linux
+mv .env.example .env
+
+# Windows PowerShell
+move .env.example .env
+```
+
+3. Fill required values in `.env`
+
+- `EXPO_PUBLIC_FIREBASE_DATABASE_URL`
+- `EXPO_PUBLIC_FIRESTORE_BASE_URL`
+- `EXPO_PUBLIC_FIREBASE_PROJECT_ID`
+
+4. Start Expo development server
+
+```bash
 npm run start
 ```
 
-Useful scripts:
+5. Run on target platform
 
-- `npm run android`
-- `npm run ios`
-- `npm run web`
+- Android: `npm run android`
+- iOS: `npm run ios`
+- Web: `npm run web`
+
+Other useful command:
+
 - `npm run lint`
 
 ## Environment and Git Hygiene

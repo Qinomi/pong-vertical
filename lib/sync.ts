@@ -106,6 +106,7 @@ async function syncPendingScores(): Promise<void> {
           score01_player1: score.score01_player1,
           score01_winner: toFirebasePlayerId(score.score01_winner),
           score01_time_elapse: score.score01_time_elapse,
+          score01_target: score.score01_target,
           score01_created_date: score.score01_created_date,
           is_online: false,
         },
@@ -124,6 +125,7 @@ async function syncPendingScores(): Promise<void> {
           player_id: toFirebasePlayerId(score.player_id),
           score02_verdict: score.score02_verdict,
           score02_time_duration: score.score02_time_duration,
+          score02_target_seconds: score.score02_target_seconds,
           score02_created_date: score.score02_created_date,
           is_online: false,
         },
@@ -183,6 +185,7 @@ export async function saveFirstToXWithSync(input: SaveFirstToXInput, options: Sa
     score01_player1: input.opponentScore,
     score01_winner: localWinnerId,
     score01_time_elapse: input.timeElapsed,
+    score01_target: input.targetScore,
     score01_created_date: createdAt,
   });
 
@@ -196,6 +199,7 @@ export async function saveFirstToXWithSync(input: SaveFirstToXInput, options: Sa
     score01_player1: input.opponentScore,
     score01_winner: isWin ? firebasePlayerId : firebaseOpponentId,
     score01_time_elapse: input.timeElapsed,
+    score01_target: input.targetScore,
     score01_created_date: createdAt,
     is_online: options.isOnlineMode,
   };
@@ -230,6 +234,7 @@ export async function saveTimeAttackWithSync(input: SaveTimeAttackInput, options
     player_id: localPlayerId,
     score02_verdict: input.verdict,
     score02_time_duration: input.timeDuration,
+    score02_target_seconds: input.targetSeconds,
     score02_created_date: createdAt,
   });
 
@@ -238,6 +243,7 @@ export async function saveTimeAttackWithSync(input: SaveTimeAttackInput, options
     player_id: firebasePlayerId,
     score02_verdict: input.verdict,
     score02_time_duration: input.timeDuration,
+    score02_target_seconds: input.targetSeconds,
     score02_created_date: createdAt,
     is_online: options.isOnlineMode,
   };

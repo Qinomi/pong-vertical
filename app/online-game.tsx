@@ -157,6 +157,7 @@ export default function OnlineGameScreen() {
                     opponentScore: opponentScore,
                     winnerId: isWin ? player.player_id : opponentId,
                     timeElapsed: 0,
+                    targetScore: target,
                 },
                 { playerName: name, isOnlineMode: true, dedupId: roomId }
             );

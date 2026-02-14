@@ -25,6 +25,7 @@ export interface FirebaseFirstToXScore {
     score01_player1: number;
     score01_winner: string;
     score01_time_elapse: number;
+    score01_target?: number;
     score01_created_date: number;
     is_online?: boolean; // New field
 }
@@ -34,6 +35,7 @@ export interface FirebaseTimeAttackScore {
     player_id: string;
     score02_verdict: string;
     score02_time_duration: number;
+    score02_target_seconds?: number;
     score02_created_date: number;
     is_online?: boolean; // New field
 }
@@ -263,6 +265,7 @@ export async function firebaseGetFirstToXScores(limitCount?: number, playerId?: 
                         score01_player1: data.score01_player1,
                         score01_winner: data.score01_winner,
                         score01_time_elapse: data.score01_time_elapse,
+                        score01_target: data.score01_target,
                         score01_created_date: data.score01_created_date,
                         is_online: data.is_online,
                     };
@@ -321,6 +324,7 @@ export async function firebaseGetTimeAttackScores(limitCount?: number, playerId?
                         player_id: data.player_id,
                         score02_verdict: data.score02_verdict,
                         score02_time_duration: data.score02_time_duration,
+                        score02_target_seconds: data.score02_target_seconds,
                         score02_created_date: data.score02_created_date,
                         is_online: data.is_online,
                     };

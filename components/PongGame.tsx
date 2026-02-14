@@ -17,6 +17,7 @@ const PADDLE_HEIGHT = 18;
 const MAX_BALL_SPEED = 12;
 
 const DEFAULT_TIME_ATTACK_SECONDS = 60;
+const TOP_CONTROLS_TOUCH_GUARD = 140;
 
 // --- Live API modifier (Free, no key): Open-Meteo current weather ---
 // Small gameplay influences:
@@ -551,8 +552,15 @@ export const PongGame: React.FC<PongGameProps> = ({
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => gameStartedRef.current,
-      onMoveShouldSetPanResponder: () => gameStartedRef.current,
+      onStartShouldSetPanResponder: (evt) => {
+        if (!gameStartedRef.current) return false;
+        // Keep top controls (pause/settings/weather) tappable while game is running.
+        return evt.nativeEvent.locationY > TOP_CONTROLS_TOUCH_GUARD;
+      },
+      onMoveShouldSetPanResponder: (evt) => {
+        if (!gameStartedRef.current) return false;
+        return evt.nativeEvent.locationY > TOP_CONTROLS_TOUCH_GUARD;
+      },
       onPanResponderMove: (_, gestureState) => {
         const paddleW = tuningRef.current.paddleWidthPx;
         let newX = gestureState.moveX - paddleW / 2;
@@ -909,7 +917,13 @@ const styles = StyleSheet.create({
   topRow: { height: 44, justifyContent: 'center', alignItems: 'center', position: 'relative' },
   leftCluster: { position: 'absolute', left: 0, flexDirection: 'row', alignItems: 'center', gap: 10 },
   rightCluster: { position: 'absolute', right: 0 },
-  timerCenter: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  timerCenter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    transform: [{ translateY: 26 }],
+  },
 
   pauseBtn: {
     width: 44,

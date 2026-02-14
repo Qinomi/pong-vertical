@@ -26,6 +26,7 @@ export interface SQLiteFirstToXScore {
     score01_player1: number;
     score01_winner: string;
     score01_time_elapse: number;
+    score01_target?: number;
     score01_created_date: number;
     synced: number; // 0 = not synced, 1 = synced
 }
@@ -35,6 +36,7 @@ export interface SQLiteTimeAttackScore {
     player_id: string;
     score02_verdict: string;
     score02_time_duration: number;
+    score02_target_seconds?: number;
     score02_created_date: number;
     synced: number; // 0 = not synced, 1 = synced
 }
@@ -60,16 +62,23 @@ export interface SQLitePendingDeletedScore {
 
 const DATABASE_NAME = 'pong_game.db';
 let db: SQLite.SQLiteDatabase | null = null;
+let initPromise: Promise<void> | null = null;
 
 /**
  * Initialize SQLite database and create tables
  */
 export async function initDatabase(): Promise<void> {
-    try {
-        db = await SQLite.openDatabaseAsync(DATABASE_NAME);
+    if (db) return;
+    if (initPromise) {
+        await initPromise;
+        return;
+    }
+
+    initPromise = (async () => {
+        const database = await SQLite.openDatabaseAsync(DATABASE_NAME);
 
         // Create Players table
-        await db.execAsync(`
+        await database.execAsync(`
       CREATE TABLE IF NOT EXISTS players (
         player_id TEXT PRIMARY KEY,
         player_name TEXT NOT NULL,
@@ -82,17 +91,17 @@ export async function initDatabase(): Promise<void> {
 
         // Lightweight migration for older installs: add updated timestamp column if missing.
         try {
-            await db.execAsync('ALTER TABLE players ADD COLUMN player_updated_date INTEGER;');
+            await database.execAsync('ALTER TABLE players ADD COLUMN player_updated_date INTEGER;');
         } catch {
             // Ignore if column already exists
         }
-        await db.execAsync(`
+        await database.execAsync(`
       UPDATE players
       SET player_updated_date = COALESCE(player_updated_date, player_created_date)
     `);
 
         // Create FirstToX Scores table
-        await db.execAsync(`
+        await database.execAsync(`
       CREATE TABLE IF NOT EXISTS scores_first_to_x (
         score01_id TEXT PRIMARY KEY,
         player_id TEXT NOT NULL,
@@ -101,25 +110,37 @@ export async function initDatabase(): Promise<void> {
         score01_player1 INTEGER NOT NULL,
         score01_winner TEXT NOT NULL,
         score01_time_elapse INTEGER NOT NULL,
+        score01_target INTEGER,
         score01_created_date INTEGER NOT NULL,
         synced INTEGER DEFAULT 0
       );
     `);
+        try {
+            await database.execAsync('ALTER TABLE scores_first_to_x ADD COLUMN score01_target INTEGER;');
+        } catch {
+            // Ignore if column already exists
+        }
 
         // Create TimeAttack Scores table
-        await db.execAsync(`
+        await database.execAsync(`
       CREATE TABLE IF NOT EXISTS scores_time_attack (
         score02_id TEXT PRIMARY KEY,
         player_id TEXT NOT NULL,
         score02_verdict TEXT NOT NULL,
         score02_time_duration INTEGER NOT NULL,
+        score02_target_seconds INTEGER,
         score02_created_date INTEGER NOT NULL,
         synced INTEGER DEFAULT 0
       );
     `);
+        try {
+            await database.execAsync('ALTER TABLE scores_time_attack ADD COLUMN score02_target_seconds INTEGER;');
+        } catch {
+            // Ignore if column already exists
+        }
 
         // Queue for deletions made while offline (or when delete sync fails)
-        await db.execAsync(`
+        await database.execAsync(`
       CREATE TABLE IF NOT EXISTS pending_deleted_scores (
         score_id TEXT NOT NULL,
         score_type TEXT NOT NULL,
@@ -128,9 +149,18 @@ export async function initDatabase(): Promise<void> {
       );
     `);
 
+        db = database;
         console.log('SQLite database initialized successfully');
-    } catch (error) {
+    })().catch((error) => {
         console.error('Failed to initialize SQLite database:', error);
+        throw error;
+    }).finally(() => {
+        initPromise = null;
+    });
+
+    try {
+        await initPromise;
+    } catch (error) {
         throw error;
     }
 }
@@ -141,6 +171,9 @@ export async function initDatabase(): Promise<void> {
 async function getDb(): Promise<SQLite.SQLiteDatabase> {
     if (!db) {
         await initDatabase();
+    }
+    if (!db) {
+        throw new Error('SQLite database is not initialized');
     }
     return db!;
 }
@@ -322,8 +355,8 @@ export async function sqliteSaveFirstToXScore(score: Omit<SQLiteFirstToXScore, '
     const database = await getDb();
     await database.runAsync(
         `INSERT OR REPLACE INTO scores_first_to_x 
-     (score01_id, player_id, player_id1, score01_player, score01_player1, score01_winner, score01_time_elapse, score01_created_date, synced)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+     (score01_id, player_id, player_id1, score01_player, score01_player1, score01_winner, score01_time_elapse, score01_target, score01_created_date, synced)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [
             score.score01_id,
             score.player_id,
@@ -332,6 +365,7 @@ export async function sqliteSaveFirstToXScore(score: Omit<SQLiteFirstToXScore, '
             score.score01_player1,
             score.score01_winner,
             score.score01_time_elapse,
+            score.score01_target ?? null,
             score.score01_created_date
         ]
     );
@@ -398,13 +432,14 @@ export async function sqliteSaveTimeAttackScore(score: Omit<SQLiteTimeAttackScor
     const database = await getDb();
     await database.runAsync(
         `INSERT OR REPLACE INTO scores_time_attack 
-     (score02_id, player_id, score02_verdict, score02_time_duration, score02_created_date, synced)
-     VALUES (?, ?, ?, ?, ?, 0)`,
+     (score02_id, player_id, score02_verdict, score02_time_duration, score02_target_seconds, score02_created_date, synced)
+     VALUES (?, ?, ?, ?, ?, ?, 0)`,
         [
             score.score02_id,
             score.player_id,
             score.score02_verdict,
             score.score02_time_duration,
+            score.score02_target_seconds ?? null,
             score.score02_created_date
         ]
     );

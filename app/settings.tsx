@@ -1,4 +1,4 @@
-import { getUserId } from '@/lib/auth';
+import { getUserId, signOut } from '@/lib/auth';
 import { updateUserProfile } from '@/lib/firestore-user';
 import {
   AI_DIFFICULTY_OPTIONS,
@@ -80,6 +80,7 @@ export default function SettingsScreen() {
   // Profile State
   const [displayName, setDisplayName] = useState('');
   const [isUpdatingName, setIsUpdatingName] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     void loadSettingsOnce();
@@ -102,6 +103,10 @@ export default function SettingsScreen() {
     setIsUpdatingName(true);
     try {
       const success = await updateUserProfile(userId, displayName.trim());
+      await import('@/lib/auth').then(({ updateCurrentUserDisplayName }) =>
+        updateCurrentUserDisplayName(displayName.trim())
+      );
+
       if (success) {
         // Check platform for alert
         if (Platform.OS === 'web') {
@@ -109,18 +114,29 @@ export default function SettingsScreen() {
         } else {
           Alert.alert('Success', 'Name updated successfully!');
         }
-
-        // Also update local auth state hack
-        import('@/lib/auth').then(({ initAuth }) => initAuth());
       } else {
-        if (Platform.OS === 'web') alert('Failed to update name.');
-        else Alert.alert('Error', 'Failed to update name.');
+        if (Platform.OS === 'web') alert('Saved locally. Cloud sync will retry when online.');
+        else Alert.alert('Saved locally', 'Cloud sync will retry when online.');
       }
     } catch (e) {
       if (Platform.OS === 'web') alert('Error updating name.');
       else Alert.alert('Error', 'Error updating name.');
     } finally {
       setIsUpdatingName(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+      router.replace('/login');
+    } catch (error) {
+      console.warn('Logout failed:', error);
+      if (Platform.OS === 'web') alert('Logout failed.');
+      else Alert.alert('Error', 'Logout failed.');
+      setIsLoggingOut(false);
     }
   };
 
@@ -243,6 +259,15 @@ export default function SettingsScreen() {
                   </View>
                 </View>
               </View>
+
+              <TouchableOpacity
+                style={[styles.logoutBtn, isLoggingOut && { opacity: 0.6 }]}
+                onPress={handleLogout}
+                disabled={isLoggingOut}
+              >
+                <Ionicons name="log-out-outline" size={18} color="#ff4b2b" />
+                <Text style={styles.logoutBtnText}>{isLoggingOut ? 'LOGGING OUT...' : 'LOG OUT'}</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.section}>
@@ -515,6 +540,24 @@ const styles = StyleSheet.create({
     color: '#000',
     fontWeight: '800',
     fontSize: 14,
+  },
+  logoutBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 75, 43, 0.35)',
+    backgroundColor: 'rgba(255, 75, 43, 0.08)',
+  },
+  logoutBtnText: {
+    color: '#ff4b2b',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
 
   labelRow: { flexDirection: 'row', alignItems: 'center' },
